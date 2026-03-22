@@ -84,7 +84,11 @@ app.post("/api/login", async (req, res) => {
       deviceName: device.name || device.nick || "Deebot",
     };
     const mapData = { pieces: [], robotPos: { x: 0, y: 0, angle: 0 } };
-    let cleaningLog = [];
+
+    // Create session object early so event handlers can mutate it directly
+    const token = crypto.randomUUID();
+    const timer = setTimeout(() => destroySession(token), SESSION_TTL);
+    const session = { api, vacBot, vacState, mapData, cleaningLog: [], timer };
 
     // Wire up events
     vacBot.on("ready", () => {
@@ -105,15 +109,12 @@ app.post("/api/login", async (req, res) => {
     vacBot.on("LifeSpan_filter", (v) => { vacState.consumables.filter = v; });
     vacBot.on("MapPieceFound", (p) => { mapData.pieces.push(p); });
     vacBot.on("DeebotPosition", (p) => { mapData.robotPos = p; });
-    vacBot.on("CleanLogs", (l) => { cleaningLog = l; });
+    vacBot.on("CleanLogs", (l) => { session.cleaningLog = l; });
     vacBot.on("Error", (msg) => { console.error("VacBot error:", msg); });
 
     await vacBot.connect_and_wait_until_ready();
 
-    // Create session
-    const token = crypto.randomUUID();
-    const timer = setTimeout(() => destroySession(token), SESSION_TTL);
-    sessions.set(token, { api, vacBot, vacState, mapData, cleaningLog, timer });
+    sessions.set(token, session);
 
     console.log(`Session created for ${email} (${sessions.size} active)`);
 
@@ -145,8 +146,8 @@ app.get("/api/state", (req, res) => {
 });
 
 // ── COMMANDS ──────────────────────────────────────────────────────────────────
-function cmdRoute(path, fn) {
-  app.post(path, (req, res) => {
+function cmdRoute(route, fn) {
+  app.post(route, (req, res) => {
     const s = getSession(req, res);
     if (!s) return;
     if (!s.vacBot) return res.status(503).json({ error: "Robot not connected" });

@@ -468,10 +468,13 @@ let token = localStorage.getItem("deebot_token");
 
 // ── Init ──
 if (token) {
-  showApp();
-  pollState();
-} else {
-  document.getElementById("login-screen").classList.add("active");
+  // Validate token before showing app (avoids flash if session expired)
+  fetch(API + "/api/state", { headers: { "Authorization": "Bearer " + token } })
+    .then(r => {
+      if (r.ok) { showApp(); pollState(); }
+      else { token = null; localStorage.removeItem("deebot_token"); }
+    })
+    .catch(() => { token = null; localStorage.removeItem("deebot_token"); });
 }
 
 // ── Login ──
@@ -549,10 +552,13 @@ async function move(dir) {
 async function setSuction(level, el) {
   document.querySelectorAll(".suction-btn").forEach(b => b.classList.remove("active"));
   el.classList.add("active");
-  await fetch(API + "/api/setSuction", {
-    method: "POST", headers: authHeaders(), body: JSON.stringify({ level }),
-  });
-  toast("Suction: " + level);
+  try {
+    const res = await fetch(API + "/api/setSuction", {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ level }),
+    });
+    if (res.status === 401) return doLogout();
+    toast("Suction: " + level);
+  } catch { toast("Connection error", true); }
 }
 
 // ── Polling ──
@@ -616,6 +622,9 @@ function toast(msg, isError) {
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // Enter key on login form
+document.getElementById("email").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doLogin();
+});
 document.getElementById("password").addEventListener("keydown", (e) => {
   if (e.key === "Enter") doLogin();
 });
