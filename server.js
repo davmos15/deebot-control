@@ -201,6 +201,11 @@ cmdRoute("/api/charge", (s, _req, res) => {
 });
 
 cmdRoute("/api/move", (s, req, res) => {
+  const status = s.vacState.status;
+  // If cleaning/auto, pause first so manual move works
+  if (status && status !== "idle" && status !== "paused" && status !== "charging") {
+    s.vacBot.run("Pause");
+  }
   s.vacBot.run("Move", req.body.direction);
   res.json({ success: true });
 });

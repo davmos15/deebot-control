@@ -307,25 +307,27 @@
     margin-bottom: 24px;
   }
   .joystick-area {
-    width: 200px;
-    height: 200px;
+    width: 220px;
+    height: 220px;
     border-radius: 50%;
-    background: var(--surface);
+    background: radial-gradient(circle, var(--surface2) 0%, var(--surface) 70%);
     position: relative;
     touch-action: none;
-    border: 2px solid var(--surface2);
+    border: 3px solid var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow), inset 0 0 30px rgba(0,0,0,0.3);
   }
   .joystick-knob {
-    width: 64px;
-    height: 64px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
-    background: var(--accent);
+    background: radial-gradient(circle at 35% 35%, #5eead4, var(--accent));
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     transition: none;
-    box-shadow: 0 0 16px var(--accent-glow);
+    box-shadow: 0 0 20px var(--accent-glow), 0 4px 12px rgba(0,0,0,0.4);
+    border: 2px solid rgba(255,255,255,0.2);
   }
   .joystick-label {
     position: absolute;
@@ -861,8 +863,8 @@ function toggleControlMode() {
     if (dist > 1) { dx /= dist; dy /= dist; }
 
     // Move knob visually
-    const px = dx * (radius - 32);
-    const py = dy * (radius - 32);
+    const px = dx * (radius - 36);
+    const py = dy * (radius - 36);
     knob.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
 
     const dir = getDir(dx, dy, dist);
