@@ -91,7 +91,7 @@ app.post("/api/login", async (req, res) => {
     // Create session object early so event handlers can mutate it directly
     const token = crypto.randomUUID();
     const timer = setTimeout(() => destroySession(token), SESSION_TTL);
-    const session = { api, vacBot, vacState, cleaningLog: [], timer };
+    const session = { api, vacBot, vacState, cleaningLog: [], mapImage: null, timer };
 
     // Wire up events
     vacBot.on("ready", () => {
@@ -104,7 +104,7 @@ app.post("/api/login", async (req, res) => {
       vacBot.run("GetLifeSpan", "filter");
       vacBot.run("GetPosition");
       vacBot.run("GetChargePosition");
-      vacBot.run("GetMaps", true, false);
+      vacBot.run("GetMaps", true, true);
     });
     vacBot.on("BatteryInfo", (v) => { vacState.battery = Math.round(v); });
     vacBot.on("CleanReport", (v) => { vacState.status = v; });
@@ -122,6 +122,10 @@ app.post("/api/login", async (req, res) => {
     });
     vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
     vacBot.on("CurrentMapName", (v) => { vacState.currentMapName = v; });
+    vacBot.on("MapImage", (v) => {
+      session.mapImage = v;
+      console.log(`Map image updated for session ${token.slice(0, 8)}...`);
+    });
     vacBot.on("CleanLogs", (l) => { session.cleaningLog = l; });
     vacBot.on("Error", (msg) => { console.error("VacBot error:", msg); });
 
@@ -155,7 +159,7 @@ app.post("/api/logout", (req, res) => {
 app.get("/api/state", (req, res) => {
   const s = getSession(req, res);
   if (!s) return;
-  res.json({ ...s.vacState, cleaningLog: s.cleaningLog });
+  res.json({ ...s.vacState, hasMap: !!s.mapImage, cleaningLog: s.cleaningLog });
 });
 
 // ── COMMANDS ──────────────────────────────────────────────────────────────────
@@ -204,6 +208,17 @@ cmdRoute("/api/setSuction", (s, req, res) => {
   const suctionMap = { quiet: 1000, standard: 0, max: 1, "max+": 2 };
   s.vacBot.run("SetFanSpeed", suctionMap[req.body.level] ?? 0);
   res.json({ success: true });
+});
+
+app.get("/api/map", (req, res) => {
+  const s = getSession(req, res);
+  if (!s) return;
+  if (!s.mapImage) return res.status(404).json({ error: "Map not available yet" });
+  // mapImage is a base64 PNG string from the ecovacs-deebot canvas renderer
+  const buf = Buffer.from(s.mapImage, "base64");
+  res.set("Content-Type", "image/png");
+  res.set("Cache-Control", "no-store");
+  res.send(buf);
 });
 
 app.get("/api/cleaningLog", (req, res) => {

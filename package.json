@@ -18,5 +18,8 @@
     "ecovacs-deebot": "^0.9.5",
     "express": "^5.2.1",
     "node-machine-id": "^1.1.12"
+  },
+  "optionalDependencies": {
+    "canvas": "^3.1.0"
   }
 }

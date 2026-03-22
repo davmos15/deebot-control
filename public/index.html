@@ -180,6 +180,36 @@
     transition: width 0.5s ease, background 0.5s ease;
   }
 
+  /* Map */
+  .map-section { margin-bottom: 24px; }
+  .map-container {
+    position: relative;
+    background: var(--surface);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .map-container img {
+    width: 100%;
+    height: auto;
+    display: block;
+    min-height: 200px;
+    object-fit: contain;
+    background: #111827;
+  }
+  .map-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 14px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  }
+  .map-room-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
   /* Buttons grid */
   .section-label {
     font-size: 13px;
@@ -415,6 +445,17 @@
       </div>
     </div>
 
+    <!-- Map -->
+    <div class="map-section" id="map-section" style="display:none;">
+      <div class="section-label">Live Map</div>
+      <div class="map-container">
+        <img id="map-img" alt="Vacuum map">
+        <div class="map-overlay">
+          <span id="map-room" class="map-room-label"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- Main controls -->
     <div class="section-label">Controls</div>
     <div class="btn-grid">
@@ -617,6 +658,28 @@ async function fetchState() {
   } catch {}
 }
 
+// ── Map ──
+let mapVisible = false;
+let mapThrottle = false;
+async function fetchMap() {
+  if (!token) return;
+  try {
+    const res = await fetch(API + "/api/map", { headers: authHeaders() });
+    if (res.status === 401) return doLogout();
+    if (!res.ok) return; // map not ready yet
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const img = document.getElementById("map-img");
+    const oldUrl = img.src;
+    img.src = url;
+    if (oldUrl && oldUrl.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
+    if (!mapVisible) {
+      document.getElementById("map-section").style.display = "";
+      mapVisible = true;
+    }
+  } catch {}
+}
+
 function updateUI(s) {
   // Status
   const badge = document.getElementById("status-badge");
@@ -632,6 +695,17 @@ function updateUI(s) {
     fill.style.width = pct + "%";
     fill.style.background = pct > 40 ? "var(--green)" : pct > 15 ? "var(--orange)" : "var(--red)";
   }
+
+  // Map overlay
+  if (s.hasMap && !mapThrottle) {
+    mapThrottle = true;
+    fetchMap();
+    setTimeout(() => { mapThrottle = false; }, 10000);
+  }
+  const roomName = s.currentSpotArea || "";
+  document.getElementById("map-room").textContent = roomName
+    ? "Currently in: " + roomName
+    : "";
 
   // Location
   document.getElementById("loc-map").textContent = s.currentMapName || "--";
