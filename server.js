@@ -11,7 +11,9 @@ const crypto = require("crypto");
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
-const EcoVacsAPI = require("ecovacs-deebot").EcoVacsAPI;
+const ecovacsDeebot = require("ecovacs-deebot");
+const EcoVacsAPI = ecovacsDeebot.EcoVacsAPI;
+const countries = ecovacsDeebot.countries;
 const nodeMachineId = require("node-machine-id");
 
 const app = express();
@@ -54,17 +56,15 @@ app.post("/api/login", async (req, res) => {
     return res.status(400).json({ error: "Email and password are required" });
   }
 
-  const cc = (country || "us").toLowerCase();
-  const cont = (continent || (EcoVacsAPI.isGlobalCountry(cc) ? "ww" : "eu")).toLowerCase();
+  const cc = (country || "us").toUpperCase();
+  const cont = (continent || (countries[cc] ? countries[cc].continent : "WW")).toUpperCase();
 
   try {
-    const deviceId = EcoVacsAPI.isGlobalCountry(cc)
-      ? nodeMachineId.machineIdSync()
-      : EcoVacsAPI.md5(nodeMachineId.machineIdSync());
+    const deviceId = EcoVacsAPI.getDeviceId(nodeMachineId.machineIdSync());
 
-    const api = new EcoVacsAPI(deviceId, email, EcoVacsAPI.md5(password), cc, cont);
+    const api = new EcoVacsAPI(deviceId, cc, cont);
     console.log(`Logging in ${email}...`);
-    await api.connect();
+    await api.connect(email, EcoVacsAPI.md5(password));
 
     const devices = await api.devices();
     if (!devices.length) {
@@ -74,7 +74,7 @@ app.post("/api/login", async (req, res) => {
     const device = devices[0];
     const vacBot = api.getVacBot(
       api.uid, EcoVacsAPI.REALM, api.resource, api.user_access_token,
-      device, cont
+      device
     );
 
     const vacState = {
