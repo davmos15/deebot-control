@@ -124,8 +124,8 @@ app.post("/api/login", async (req, res) => {
     });
     vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
     vacBot.on("MapImageData", (v) => {
+      console.log(`MapImageData type: ${typeof v}, keys: ${typeof v === 'object' ? Object.keys(v) : 'n/a'}`);
       session.mapImage = v;
-      console.log(`Map image updated for session ${token.slice(0, 8)}...`);
     });
     vacBot.on("CurrentMapMID", (v) => {
       vacState.currentMapMID = v;
@@ -222,11 +222,24 @@ app.get("/api/map", (req, res) => {
   const s = getSession(req, res);
   if (!s) return;
   if (!s.mapImage) return res.status(404).json({ error: "Map not available yet" });
-  // mapImage is a base64 PNG string from the ecovacs-deebot canvas renderer
-  const buf = Buffer.from(s.mapImage, "base64");
-  res.set("Content-Type", "image/png");
-  res.set("Cache-Control", "no-store");
-  res.send(buf);
+  try {
+    // mapImage may be a base64 string or an object with the base64 data inside
+    let b64 = s.mapImage;
+    if (typeof b64 === "object") {
+      // Try common property names the library might use
+      b64 = b64.base64 || b64.data || b64.mapImage || b64.image || b64;
+    }
+    if (typeof b64 !== "string") {
+      // Last resort: send as JSON so we can inspect the structure
+      return res.json({ debug: "mapImage is not a string", keys: Object.keys(s.mapImage), type: typeof s.mapImage });
+    }
+    const buf = Buffer.from(b64, "base64");
+    res.set("Content-Type", "image/png");
+    res.set("Cache-Control", "no-store");
+    res.send(buf);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to render map", detail: err.message });
+  }
 });
 
 app.get("/api/cleaningLog", (req, res) => {
