@@ -125,7 +125,9 @@ app.post("/api/login", async (req, res) => {
     vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
     vacBot.on("MapImageData", (v) => {
       if (v && v.mapBase64PNG) {
-        session.mapImage = v.mapBase64PNG;
+        const raw = v.mapBase64PNG;
+        console.log(`MapImageData: type=${typeof raw}, len=${raw.length}, starts=${String(raw).substring(0, 80)}`);
+        session.mapImage = raw;
       }
     });
     vacBot.on("CurrentMapMID", (v) => { vacState.currentMapMID = v; });
