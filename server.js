@@ -82,13 +82,16 @@ app.post("/api/login", async (req, res) => {
       battery: null,
       consumables: {},
       deviceName: device.name || device.nick || "Deebot",
+      robotPos: null,
+      chargePos: null,
+      currentSpotArea: null,
+      currentMapName: null,
     };
-    const mapData = { pieces: [], robotPos: { x: 0, y: 0, angle: 0 } };
 
     // Create session object early so event handlers can mutate it directly
     const token = crypto.randomUUID();
     const timer = setTimeout(() => destroySession(token), SESSION_TTL);
-    const session = { api, vacBot, vacState, mapData, cleaningLog: [], timer };
+    const session = { api, vacBot, vacState, cleaningLog: [], timer };
 
     // Wire up events
     vacBot.on("ready", () => {
@@ -99,16 +102,26 @@ app.post("/api/login", async (req, res) => {
       vacBot.run("GetLifeSpan", "main_brush");
       vacBot.run("GetLifeSpan", "side_brush");
       vacBot.run("GetLifeSpan", "filter");
-      vacBot.run("GetMaps");
+      vacBot.run("GetPosition");
+      vacBot.run("GetChargePosition");
+      vacBot.run("GetMaps", true, false);
     });
-    vacBot.on("BatteryInfo", (v) => { vacState.battery = Math.round(v * 100); });
+    vacBot.on("BatteryInfo", (v) => { vacState.battery = Math.round(v); });
     vacBot.on("CleanReport", (v) => { vacState.status = v; });
     vacBot.on("ChargeState", (v) => { if (v === "charging") vacState.status = "charging"; });
     vacBot.on("LifeSpan_main_brush", (v) => { vacState.consumables.mainBrush = v; });
     vacBot.on("LifeSpan_side_brush", (v) => { vacState.consumables.sideBrush = v; });
     vacBot.on("LifeSpan_filter", (v) => { vacState.consumables.filter = v; });
-    vacBot.on("MapPieceFound", (p) => { mapData.pieces.push(p); });
-    vacBot.on("DeebotPosition", (p) => { mapData.robotPos = p; });
+    vacBot.on("DeebotPosition", (v) => {
+      const [x, y, a] = String(v).split(",").map(Number);
+      vacState.robotPos = { x, y, angle: a };
+    });
+    vacBot.on("ChargePosition", (v) => {
+      const [x, y, a] = String(v).split(",").map(Number);
+      vacState.chargePos = { x, y, angle: a };
+    });
+    vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
+    vacBot.on("CurrentMapName", (v) => { vacState.currentMapName = v; });
     vacBot.on("CleanLogs", (l) => { session.cleaningLog = l; });
     vacBot.on("Error", (msg) => { console.error("VacBot error:", msg); });
 
@@ -142,7 +155,7 @@ app.post("/api/logout", (req, res) => {
 app.get("/api/state", (req, res) => {
   const s = getSession(req, res);
   if (!s) return;
-  res.json({ ...s.vacState, map: s.mapData, cleaningLog: s.cleaningLog });
+  res.json({ ...s.vacState, cleaningLog: s.cleaningLog });
 });
 
 // ── COMMANDS ──────────────────────────────────────────────────────────────────
@@ -191,12 +204,6 @@ cmdRoute("/api/setSuction", (s, req, res) => {
   const suctionMap = { quiet: 1000, standard: 0, max: 1, "max+": 2 };
   s.vacBot.run("SetFanSpeed", suctionMap[req.body.level] ?? 0);
   res.json({ success: true });
-});
-
-app.get("/api/map", (req, res) => {
-  const s = getSession(req, res);
-  if (!s) return;
-  res.json(s.mapData);
 });
 
 app.get("/api/cleaningLog", (req, res) => {

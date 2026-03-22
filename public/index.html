@@ -278,6 +278,23 @@
     background: var(--accent-glow);
   }
 
+  /* Location */
+  .location-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+  .location-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+  }
+  .location-row + .location-row { border-top: 1px solid var(--surface2); }
+  .location-label { font-size: 14px; color: var(--text2); }
+  .location-val { font-size: 14px; font-weight: 600; }
+
   /* Consumables */
   .consumables {
     background: var(--surface);
@@ -440,6 +457,27 @@
       <button class="down" onclick="move('backward')">&#9660;</button>
     </div>
 
+    <!-- Location -->
+    <div class="section-label">Location</div>
+    <div class="location-card">
+      <div class="location-row">
+        <span class="location-label">Map</span>
+        <span class="location-val" id="loc-map">--</span>
+      </div>
+      <div class="location-row">
+        <span class="location-label">Room</span>
+        <span class="location-val" id="loc-room">--</span>
+      </div>
+      <div class="location-row">
+        <span class="location-label">Position</span>
+        <span class="location-val" id="loc-pos">--</span>
+      </div>
+      <div class="location-row">
+        <span class="location-label">Dock</span>
+        <span class="location-val" id="loc-dock">--</span>
+      </div>
+    </div>
+
     <!-- Consumables -->
     <div class="section-label">Consumables</div>
     <div class="consumables" id="consumables">
@@ -595,6 +633,16 @@ function updateUI(s) {
     fill.style.background = pct > 40 ? "var(--green)" : pct > 15 ? "var(--orange)" : "var(--red)";
   }
 
+  // Location
+  document.getElementById("loc-map").textContent = s.currentMapName || "--";
+  document.getElementById("loc-room").textContent = s.currentSpotArea || "--";
+  document.getElementById("loc-pos").textContent = s.robotPos
+    ? `x: ${s.robotPos.x}, y: ${s.robotPos.y}`
+    : "--";
+  document.getElementById("loc-dock").textContent = s.chargePos
+    ? `x: ${s.chargePos.x}, y: ${s.chargePos.y}`
+    : "--";
+
   // Consumables
   const c = s.consumables || {};
   document.getElementById("c-main").textContent = fmtLife(c.mainBrush);
@@ -607,7 +655,7 @@ function updateUI(s) {
 
 function fmtLife(v) {
   if (v == null) return "--";
-  return Math.round(v * 100) + "%";
+  return Math.round(v) + "%";
 }
 
 // ── Toast ──
