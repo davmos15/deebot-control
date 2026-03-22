@@ -16,6 +16,8 @@ const EcoVacsAPI = ecovacsDeebot.EcoVacsAPI;
 const countries = ecovacsDeebot.countries;
 const nodeMachineId = require("node-machine-id");
 
+const canvasAvailable = EcoVacsAPI.isCanvasModuleAvailable();
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -121,10 +123,19 @@ app.post("/api/login", async (req, res) => {
       vacState.chargePos = { x, y, angle: a };
     });
     vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
-    vacBot.on("CurrentMapName", (v) => { vacState.currentMapName = v; });
     vacBot.on("MapImage", (v) => {
       session.mapImage = v;
-      console.log(`Map image updated for session ${token.slice(0, 8)}...`);
+      console.log(`Map image received (${typeof v}, length: ${v ? v.length : 0}) for session ${token.slice(0, 8)}...`);
+    });
+    vacBot.on("MapImageData", (v) => {
+      console.log(`MapImageData received for session ${token.slice(0, 8)}...`);
+    });
+    vacBot.on("CurrentMapMID", (v) => {
+      console.log(`CurrentMapMID: ${v}`);
+    });
+    vacBot.on("CurrentMapName", (v) => {
+      vacState.currentMapName = v;
+      console.log(`CurrentMapName: ${v}`);
     });
     vacBot.on("CleanLogs", (l) => { session.cleaningLog = l; });
     vacBot.on("Error", (msg) => { console.error("VacBot error:", msg); });
@@ -267,4 +278,5 @@ app.get("/{*splat}", (_req, res) => {
 // ── START ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Deebot Control Server running on http://0.0.0.0:${PORT}`);
+  console.log(`Canvas module available: ${canvasAvailable}`);
 });
