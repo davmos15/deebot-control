@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<title>Audio Lab - Deebot Control</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --accent: #38bdf8;
+    --accent-glow: rgba(56, 189, 248, 0.25);
+    --green: #4ade80;
+    --orange: #fb923c;
+    --red: #f87171;
+    --purple: #a78bfa;
+    --text: #f1f5f9;
+    --text2: #94a3b8;
+    --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--surface2);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar h1 { font-size: 18px; font-weight: 600; }
+  .back-btn {
+    background: none;
+    border: 1px solid var(--surface2);
+    color: var(--text2);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .page { padding: 20px; max-width: 500px; margin: 0 auto; width: 100%; }
+  .section-label {
+    font-size: 13px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    margin-top: 24px;
+    font-weight: 600;
+  }
+  .section-label:first-child { margin-top: 0; }
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .card-desc {
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+  /* Soundboard */
+  .sound-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .sound-btn {
+    padding: 14px 4px;
+    border: none;
+    border-radius: 10px;
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+  }
+  .sound-btn:active { transform: scale(0.92); background: var(--accent); color: var(--bg); }
+  .sound-btn.playing { background: var(--accent); color: var(--bg); }
+
+  /* Volume slider */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .slider-row input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--surface2);
+    outline: none;
+  }
+  .slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+  .slider-val {
+    font-size: 16px;
+    font-weight: 700;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  /* Toggle switches */
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+  }
+  .toggle-row + .toggle-row { border-top: 1px solid var(--surface2); }
+  .toggle-label { font-size: 14px; }
+  .toggle-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .switch {
+    position: relative;
+    width: 50px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--surface2);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .switch .slider::before {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    left: 3px;
+    top: 3px;
+    background: var(--text);
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .switch input:checked + .slider { background: var(--green); }
+  .switch input:checked + .slider::before { transform: translateX(22px); }
+
+  /* Response log */
+  .log-box {
+    background: var(--bg);
+    border: 1px solid var(--surface2);
+    border-radius: 10px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text2);
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* Custom voice */
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+  .field input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--surface2);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+  }
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .action-btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .action-btn:active { transform: scale(0.95); }
+  .action-btn.primary { background: var(--accent); color: var(--bg); }
+  .action-btn.danger { background: var(--red); color: var(--bg); }
+  .action-btn.purple { background: var(--purple); color: var(--bg); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    color: var(--text);
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Audio Lab</h1>
+  <a href="/" class="back-btn">Back</a>
+</div>
+
+<div class="page">
+
+  <!-- Volume -->
+  <div class="section-label">Volume</div>
+  <div class="card">
+    <div class="slider-row">
+      <span>&#128264;</span>
+      <input type="range" id="vol-slider" min="0" max="100" value="50" oninput="updateVolLabel()" onchange="setVolume()">
+      <span class="slider-val" id="vol-val">50</span>
+    </div>
+  </div>
+
+  <!-- Soundboard -->
+  <div class="section-label">Soundboard</div>
+  <div class="card">
+    <div class="card-desc">Tap to play different built-in sounds. Each robot has different sounds mapped to different IDs. Try them all!</div>
+    <div class="sound-grid" id="soundboard"></div>
+  </div>
+
+  <!-- Toggles -->
+  <div class="section-label">Voice & Speaker Settings</div>
+  <div class="card">
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Voice Prompts</div>
+        <div class="toggle-sub">Robot speaks status updates</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="tog-voice" onchange="setToggle('setVoiceSimple', this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Voice Assistant</div>
+        <div class="toggle-sub">On-device voice assistant</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="tog-assistant" onchange="setToggle('setVoiceAssistant', this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Bluetooth Speaker</div>
+        <div class="toggle-sub">Use vacuum as a BT speaker</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="tog-bluetooth" onchange="setToggle('setBlueSpeaker', this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Custom Voice Pack -->
+  <div class="section-label">Custom Voice Pack (Experimental)</div>
+  <div class="card">
+    <div class="card-desc">Load a custom voice pack onto the robot by providing a URL to an audio file. The robot will download and install it. Use with caution — this replaces the robot's voice.</div>
+    <div class="field">
+      <label>Audio URL</label>
+      <input type="url" id="voice-url" placeholder="https://example.com/voice-pack.bin">
+    </div>
+    <div class="field">
+      <label>Voice ID</label>
+      <input type="text" id="voice-vid" placeholder="default" value="custom">
+    </div>
+    <div class="btn-row">
+      <button class="action-btn purple" onclick="sendCustomVoice()">Upload Voice Pack</button>
+      <button class="action-btn danger" onclick="resetVoice()">Reset to Default</button>
+    </div>
+  </div>
+
+  <!-- Query / Debug -->
+  <div class="section-label">Debug Log</div>
+  <div class="card">
+    <div class="card-desc">Responses from audio commands appear here.</div>
+    <div class="btn-row" style="margin-bottom:12px;">
+      <button class="action-btn primary" onclick="queryAudioInfo()">Query Audio Info</button>
+      <button class="action-btn" style="background:var(--surface2);color:var(--text);" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-box" id="log">Tap "Query Audio Info" to start...</div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = location.origin;
+const token = localStorage.getItem("deebot_token");
+if (!token) location.href = "/";
+
+function authHeaders() {
+  return { "Authorization": "Bearer " + token, "Content-Type": "application/json" };
+}
+
+// ── Soundboard ──
+const soundboard = document.getElementById("soundboard");
+for (let i = 0; i <= 30; i++) {
+  const btn = document.createElement("button");
+  btn.className = "sound-btn";
+  btn.textContent = i;
+  btn.onclick = () => playSound(i, btn);
+  soundboard.appendChild(btn);
+}
+
+async function playSound(sid, btn) {
+  btn.classList.add("playing");
+  setTimeout(() => btn.classList.remove("playing"), 1000);
+  const res = await post("playSound", { sid });
+  log(`PlaySound(sid=${sid}): ${JSON.stringify(res)}`);
+}
+
+// ── Volume ──
+function updateVolLabel() {
+  document.getElementById("vol-val").textContent = document.getElementById("vol-slider").value;
+}
+async function setVolume() {
+  const val = Number(document.getElementById("vol-slider").value);
+  const res = await post("setVolume", { value: val });
+  log(`SetVolume(${val}): ${JSON.stringify(res)}`);
+  toast("Volume: " + val);
+}
+
+// ── Toggles ──
+async function setToggle(endpoint, enabled) {
+  const res = await post(endpoint, { enabled });
+  log(`${endpoint}(${enabled}): ${JSON.stringify(res)}`);
+  toast(endpoint + ": " + (enabled ? "ON" : "OFF"));
+}
+
+// ── Custom Voice ──
+async function sendCustomVoice() {
+  const url = document.getElementById("voice-url").value.trim();
+  const vid = document.getElementById("voice-vid").value.trim() || "custom";
+  if (!url) return toast("Enter a URL first", true);
+  const res = await post("setVoice", { enabled: true, url, vid, type: "custom", md5: "", size: 0 });
+  log(`SetVoice(url=${url}, vid=${vid}): ${JSON.stringify(res)}`);
+  toast("Voice pack sent!");
+}
+
+async function resetVoice() {
+  const res = await post("setVoice", { enabled: false, url: "", vid: "default", type: "", md5: "", size: 0 });
+  log(`ResetVoice: ${JSON.stringify(res)}`);
+  toast("Voice reset sent");
+}
+
+// ── Query ──
+async function queryAudioInfo() {
+  try {
+    const res = await fetch(API + "/api/audioInfo", { headers: authHeaders() });
+    if (res.status === 401) return location.href = "/";
+    const data = await res.json();
+    log("AudioInfo: " + JSON.stringify(data, null, 2));
+
+    // Update UI with returned values
+    if (data.volume != null) {
+      document.getElementById("vol-slider").value = data.volume;
+      document.getElementById("vol-val").textContent = data.volume;
+    }
+    if (data.voiceSimple != null) {
+      document.getElementById("tog-voice").checked = !!data.voiceSimple;
+    }
+    if (data.voiceAssistant != null) {
+      document.getElementById("tog-assistant").checked = !!data.voiceAssistant;
+    }
+    if (data.bluetoothSpeaker && data.bluetoothSpeaker.enabled != null) {
+      document.getElementById("tog-bluetooth").checked = !!data.bluetoothSpeaker.enabled;
+    }
+  } catch (e) {
+    log("Error: " + e.message);
+  }
+}
+
+// ── Helpers ──
+async function post(endpoint, body) {
+  try {
+    const res = await fetch(API + "/api/" + endpoint, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify(body),
+    });
+    if (res.status === 401) { location.href = "/"; return {}; }
+    return await res.json();
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+function log(msg) {
+  const el = document.getElementById("log");
+  const ts = new Date().toLocaleTimeString();
+  el.textContent += `\n[${ts}] ${msg}`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById("log").textContent = "";
+}
+
+function toast(msg, isError) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.style.borderColor = isError ? "var(--red)" : "var(--accent)";
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+// Volume endpoint uses named values — override to send raw number
+async function setVolume() {
+  const val = Number(document.getElementById("vol-slider").value);
+  try {
+    const res = await fetch(API + "/api/setVolume", {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ value: val }),
+    });
+    if (res.status === 401) return location.href = "/";
+    const data = await res.json();
+    log(`SetVolume(${val}): ${JSON.stringify(data)}`);
+    toast("Volume: " + val);
+  } catch (e) { log("Error: " + e.message); }
+}
+
+// Auto-query on load
+queryAudioInfo();
+</script>
+</body>
+</html>

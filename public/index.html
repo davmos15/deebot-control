@@ -416,6 +416,80 @@
     pointer-events: none;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Fullscreen map */
+  .map-fullscreen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: #000;
+    flex-direction: column;
+  }
+  .map-fullscreen.active { display: flex; }
+  .map-fs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.9);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+  }
+  .map-fs-header .room-name { font-size: 14px; font-weight: 600; }
+  .map-fs-close {
+    background: var(--surface2);
+    border: none;
+    color: var(--text);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+  }
+  .map-fs-img {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .map-fs-img img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .map-fs-joystick {
+    position: absolute;
+    bottom: 30px;
+    right: 20px;
+    z-index: 3;
+  }
+  .map-fs-joystick .joystick-area {
+    width: 140px;
+    height: 140px;
+    opacity: 0.85;
+  }
+  .map-fs-joystick .joystick-knob {
+    width: 50px;
+    height: 50px;
+  }
+  .map-fs-joystick .joystick-label { font-size: 9px; }
+  .map-tap-hint {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.5);
+    color: var(--text2);
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
@@ -485,7 +559,10 @@
 <div id="app-screen">
   <div class="topbar">
     <span class="device-name" id="device-name">Deebot</span>
-    <button class="logout-btn" onclick="doLogout()">Logout</button>
+    <div style="display:flex;gap:8px;">
+      <a href="/audio.html" class="logout-btn" style="text-decoration:none;">Audio Lab</a>
+      <button class="logout-btn" onclick="doLogout()">Logout</button>
+    </div>
   </div>
   <div class="dashboard">
 
@@ -504,11 +581,12 @@
     <!-- Map -->
     <div class="map-section" id="map-section" style="display:none;">
       <div class="section-label">Live Map</div>
-      <div class="map-container">
+      <div class="map-container" onclick="openMapFullscreen()" style="cursor:pointer;">
         <img id="map-img" alt="Vacuum map">
         <div class="map-overlay">
           <span id="map-room" class="map-room-label"></span>
         </div>
+        <div class="map-tap-hint">Tap for fullscreen</div>
       </div>
     </div>
 
@@ -608,6 +686,26 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Fullscreen Map -->
+<div class="map-fullscreen" id="map-fullscreen">
+  <div class="map-fs-header">
+    <span class="room-name" id="fs-room"></span>
+    <button class="map-fs-close" onclick="closeMapFullscreen()">&#10005;</button>
+  </div>
+  <div class="map-fs-img">
+    <img id="fs-map-img" alt="Map">
+  </div>
+  <div class="map-fs-joystick">
+    <div class="joystick-area" id="fs-joystick">
+      <span class="joystick-label top">FWD</span>
+      <span class="joystick-label bottom">BACK</span>
+      <span class="joystick-label left">L</span>
+      <span class="joystick-label right">R</span>
+      <div class="joystick-knob" id="fs-joystick-knob"></div>
+    </div>
   </div>
 </div>
 
@@ -897,6 +995,100 @@ function toggleControlMode() {
   area.addEventListener("pointerup", resetKnob);
   area.addEventListener("pointercancel", resetKnob);
 })();
+
+// ── Fullscreen Map ──
+let fsMapInterval = null;
+
+function openMapFullscreen() {
+  const fs = document.getElementById("map-fullscreen");
+  fs.classList.add("active");
+  // Copy current map image
+  const src = document.getElementById("map-img").src;
+  if (src) document.getElementById("fs-map-img").src = src;
+  document.getElementById("fs-room").textContent = document.getElementById("map-room").textContent;
+  // Poll map faster while fullscreen
+  fsMapInterval = setInterval(async () => {
+    try {
+      const res = await fetch(API + "/api/map", { headers: authHeaders() });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const img = document.getElementById("fs-map-img");
+      const old = img.src;
+      img.src = url;
+      if (old && old.startsWith("blob:")) URL.revokeObjectURL(old);
+    } catch {}
+  }, 5000);
+  initFsJoystick();
+}
+
+function closeMapFullscreen() {
+  document.getElementById("map-fullscreen").classList.remove("active");
+  clearInterval(fsMapInterval);
+}
+
+function initFsJoystick() {
+  const area = document.getElementById("fs-joystick");
+  const knob = document.getElementById("fs-joystick-knob");
+  if (area._init) return;
+  area._init = true;
+
+  let active = false;
+  let lastDir = null;
+  let moveInterval = null;
+  const deadzone = 0.25;
+
+  function getDir(dx, dy, dist) {
+    if (dist < deadzone) return null;
+    const angle = Math.atan2(-dy, dx) * (180 / Math.PI);
+    if (angle >= -45 && angle < 45) return "right";
+    if (angle >= 45 && angle < 135) return "forward";
+    if (angle >= -135 && angle < -45) return "backward";
+    return "left";
+  }
+
+  function handleMove(clientX, clientY) {
+    const rect = area.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const radius = rect.width / 2;
+    let dx = (clientX - cx) / radius;
+    let dy = (clientY - cy) / radius;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 1) { dx /= dist; dy /= dist; }
+    const px = dx * (radius - 25);
+    const py = dy * (radius - 25);
+    knob.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
+    const dir = getDir(dx, dy, dist);
+    if (dir !== lastDir) {
+      lastDir = dir;
+      clearInterval(moveInterval);
+      if (dir) {
+        move(dir);
+        moveInterval = setInterval(() => move(dir), 500);
+      }
+    }
+  }
+
+  function resetKnob() {
+    active = false;
+    lastDir = null;
+    clearInterval(moveInterval);
+    knob.style.transform = "translate(-50%, -50%)";
+  }
+
+  area.addEventListener("pointerdown", (e) => {
+    active = true;
+    area.setPointerCapture(e.pointerId);
+    handleMove(e.clientX, e.clientY);
+  });
+  area.addEventListener("pointermove", (e) => {
+    if (!active) return;
+    handleMove(e.clientX, e.clientY);
+  });
+  area.addEventListener("pointerup", resetKnob);
+  area.addEventListener("pointercancel", resetKnob);
+}
 
 // Enter key on login form
 document.getElementById("email").addEventListener("keydown", (e) => {

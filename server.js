@@ -129,6 +129,10 @@ app.post("/api/login", async (req, res) => {
       }
     });
     vacBot.on("CurrentMapMID", (v) => { vacState.currentMapMID = v; });
+    vacBot.on("Volume", (v) => { vacState.volume = v; });
+    vacBot.on("VoiceSimple", (v) => { vacState.voiceSimple = v; });
+    vacBot.on("VoiceAssistantState", (v) => { vacState.voiceAssistant = v; });
+    vacBot.on("BlueSpeaker", (v) => { vacState.bluetoothSpeaker = v; });
     vacBot.on("CurrentMapName", (v) => {
       vacState.currentMapName = v;
     });
@@ -210,8 +214,9 @@ cmdRoute("/api/move", (s, req, res) => {
   res.json({ success: true });
 });
 
-cmdRoute("/api/playSound", (s, _req, res) => {
-  s.vacBot.run("PlaySound");
+cmdRoute("/api/playSound", (s, req, res) => {
+  const sid = req.body.sid != null ? Number(req.body.sid) : 0;
+  s.vacBot.run("PlaySound", sid);
   res.json({ success: true });
 });
 
@@ -261,9 +266,52 @@ cmdRoute("/api/setDoNotDisturb", (s, req, res) => {
 });
 
 cmdRoute("/api/setVolume", (s, req, res) => {
+  const v = req.body.value;
   const volMap = { mute: 0, low: 33, mid: 66, high: 100 };
-  s.vacBot.run("SetVolume", volMap[req.body.value] ?? 66);
+  const vol = typeof v === "number" ? v : (volMap[v] ?? 66);
+  s.vacBot.run("SetVolume", vol);
   res.json({ success: true });
+});
+
+// ── AUDIO / SPEAKER ───────────────────────────────────────────────────────────
+cmdRoute("/api/setBlueSpeaker", (s, req, res) => {
+  s.vacBot.run("SetBlueSpeaker", req.body.enabled ? 1 : 0);
+  res.json({ success: true });
+});
+
+cmdRoute("/api/setVoiceSimple", (s, req, res) => {
+  s.vacBot.run("SetVoiceSimple", req.body.enabled ? 1 : 0);
+  res.json({ success: true });
+});
+
+cmdRoute("/api/setVoiceAssistant", (s, req, res) => {
+  s.vacBot.run("SetVoiceAssistantState", req.body.enabled ? 1 : 0);
+  res.json({ success: true });
+});
+
+cmdRoute("/api/setVoice", (s, req, res) => {
+  const { enabled, md5, size, type, url, vid } = req.body;
+  s.vacBot.run("SetVoice", enabled ? 1 : 0, md5 || "", size || 0, type || "", url || "", vid || "default");
+  res.json({ success: true });
+});
+
+app.get("/api/audioInfo", (req, res) => {
+  const s = getSession(req, res);
+  if (!s) return;
+  // Query current audio states
+  s.vacBot.run("GetVolume");
+  s.vacBot.run("GetVoiceSimple");
+  s.vacBot.run("GetVoiceAssistantState");
+  s.vacBot.run("GetListenMusic");
+  s.vacBot.run("GetAudioCallState");
+  s.vacBot.run("GetVoice");
+  // Return what we have cached in vacState
+  res.json({
+    volume: s.vacState.volume,
+    voiceSimple: s.vacState.voiceSimple,
+    voiceAssistant: s.vacState.voiceAssistant,
+    bluetoothSpeaker: s.vacState.bluetoothSpeaker,
+  });
 });
 
 // ── HEALTH ────────────────────────────────────────────────────────────────────
