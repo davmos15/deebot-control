@@ -253,6 +253,22 @@
   .cmd-btn.warn { background: var(--orange); color: var(--bg); }
   .cmd-btn.warn:active { background: #f97316; }
 
+  /* Manual control toggle */
+  .control-toggle {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+  }
+  .toggle-btn {
+    background: none;
+    border: 1px solid var(--surface2);
+    color: var(--text2);
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
   /* D-Pad */
   .dpad {
     display: grid;
@@ -283,6 +299,44 @@
   .dpad .left { grid-area: left; }
   .dpad .right { grid-area: right; }
   .dpad .stop { grid-area: stop; background: var(--red); color: var(--bg); }
+
+  /* Joystick */
+  .joystick-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+  .joystick-area {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: var(--surface);
+    position: relative;
+    touch-action: none;
+    border: 2px solid var(--surface2);
+  }
+  .joystick-knob {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--accent);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: none;
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .joystick-label {
+    position: absolute;
+    font-size: 11px;
+    color: var(--text2);
+    pointer-events: none;
+  }
+  .joystick-label.top { top: 8px; left: 50%; transform: translateX(-50%); }
+  .joystick-label.bottom { bottom: 8px; left: 50%; transform: translateX(-50%); }
+  .joystick-label.left { left: 8px; top: 50%; transform: translateY(-50%); }
+  .joystick-label.right { right: 8px; top: 50%; transform: translateY(-50%); }
 
   /* Suction selector */
   .suction-row {
@@ -488,14 +542,30 @@
       <button class="suction-btn" onclick="setSuction('max+',this)">Max+</button>
     </div>
 
-    <!-- D-Pad -->
+    <!-- Manual Control -->
     <div class="section-label">Manual Control</div>
-    <div class="dpad">
-      <button class="up" onclick="move('forward')">&#9650;</button>
-      <button class="left" onclick="move('left')">&#9664;</button>
-      <button class="stop" onclick="cmd('stop')">&#9724;</button>
-      <button class="right" onclick="move('right')">&#9654;</button>
-      <button class="down" onclick="move('backward')">&#9660;</button>
+    <div class="control-toggle">
+      <button class="toggle-btn" id="ctrl-toggle" onclick="toggleControlMode()">Switch to Buttons</button>
+    </div>
+    <div id="joystick-container">
+      <div class="joystick-wrap">
+        <div class="joystick-area" id="joystick">
+          <span class="joystick-label top">FWD</span>
+          <span class="joystick-label bottom">BACK</span>
+          <span class="joystick-label left">LEFT</span>
+          <span class="joystick-label right">RIGHT</span>
+          <div class="joystick-knob" id="joystick-knob"></div>
+        </div>
+      </div>
+    </div>
+    <div id="dpad-container" style="display:none;">
+      <div class="dpad">
+        <button class="up" onclick="move('forward')">&#9650;</button>
+        <button class="left" onclick="move('left')">&#9664;</button>
+        <button class="stop" onclick="cmd('stop')">&#9724;</button>
+        <button class="right" onclick="move('right')">&#9654;</button>
+        <button class="down" onclick="move('backward')">&#9660;</button>
+      </div>
     </div>
 
     <!-- Location -->
@@ -742,6 +812,89 @@ function toast(msg, isError) {
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ── Control mode toggle ──
+let controlMode = "joystick";
+function toggleControlMode() {
+  const btn = document.getElementById("ctrl-toggle");
+  if (controlMode === "joystick") {
+    controlMode = "buttons";
+    document.getElementById("joystick-container").style.display = "none";
+    document.getElementById("dpad-container").style.display = "";
+    btn.textContent = "Switch to Joystick";
+  } else {
+    controlMode = "joystick";
+    document.getElementById("joystick-container").style.display = "";
+    document.getElementById("dpad-container").style.display = "none";
+    btn.textContent = "Switch to Buttons";
+  }
+}
+
+// ── Joystick ──
+(function initJoystick() {
+  const area = document.getElementById("joystick");
+  const knob = document.getElementById("joystick-knob");
+  if (!area || !knob) return;
+
+  let active = false;
+  let lastDir = null;
+  let moveInterval = null;
+  const deadzone = 0.25;
+
+  function getDir(dx, dy, dist) {
+    if (dist < deadzone) return null;
+    const angle = Math.atan2(-dy, dx) * (180 / Math.PI);
+    if (angle >= -45 && angle < 45) return "right";
+    if (angle >= 45 && angle < 135) return "forward";
+    if (angle >= -135 && angle < -45) return "backward";
+    return "left";
+  }
+
+  function handleMove(clientX, clientY) {
+    const rect = area.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const radius = rect.width / 2;
+    let dx = (clientX - cx) / radius;
+    let dy = (clientY - cy) / radius;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 1) { dx /= dist; dy /= dist; }
+
+    // Move knob visually
+    const px = dx * (radius - 32);
+    const py = dy * (radius - 32);
+    knob.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
+
+    const dir = getDir(dx, dy, dist);
+    if (dir !== lastDir) {
+      lastDir = dir;
+      clearInterval(moveInterval);
+      if (dir) {
+        move(dir);
+        moveInterval = setInterval(() => move(dir), 500);
+      }
+    }
+  }
+
+  function resetKnob() {
+    active = false;
+    lastDir = null;
+    clearInterval(moveInterval);
+    knob.style.transform = "translate(-50%, -50%)";
+  }
+
+  area.addEventListener("pointerdown", (e) => {
+    active = true;
+    area.setPointerCapture(e.pointerId);
+    handleMove(e.clientX, e.clientY);
+  });
+  area.addEventListener("pointermove", (e) => {
+    if (!active) return;
+    handleMove(e.clientX, e.clientY);
+  });
+  area.addEventListener("pointerup", resetKnob);
+  area.addEventListener("pointercancel", resetKnob);
+})();
 
 // Enter key on login form
 document.getElementById("email").addEventListener("keydown", (e) => {

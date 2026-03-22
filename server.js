@@ -83,7 +83,7 @@ app.post("/api/login", async (req, res) => {
       status: "connecting",
       battery: null,
       consumables: {},
-      deviceName: device.name || device.nick || "Deebot",
+      deviceName: device.nick || device.deviceName || device.name || "Deebot",
       robotPos: null,
       chargePos: null,
       currentSpotArea: null,
@@ -125,9 +125,7 @@ app.post("/api/login", async (req, res) => {
     vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
     vacBot.on("MapImageData", (v) => {
       if (v && v.mapBase64PNG) {
-        const raw = v.mapBase64PNG;
-        console.log(`MapImageData: type=${typeof raw}, len=${raw.length}, starts=${String(raw).substring(0, 80)}`);
-        session.mapImage = raw;
+        session.mapImage = v.mapBase64PNG;
       }
     });
     vacBot.on("CurrentMapMID", (v) => { vacState.currentMapMID = v; });
@@ -145,7 +143,7 @@ app.post("/api/login", async (req, res) => {
 
     const deviceList = devices.map((d, i) => ({
       index: i,
-      name: d.name || d.nick || "Unknown",
+      name: d.nick || d.deviceName || d.name || "Unknown",
       did: d.did,
     }));
 
@@ -222,7 +220,9 @@ app.get("/api/map", (req, res) => {
   const s = getSession(req, res);
   if (!s) return;
   if (!s.mapImage) return res.status(404).json({ error: "Map not available yet" });
-  const buf = Buffer.from(s.mapImage, "base64");
+  // mapImage is a data URI: "data:image/png;base64,..." — strip prefix to get raw base64
+  const b64 = s.mapImage.replace(/^data:image\/\w+;base64,/, "");
+  const buf = Buffer.from(b64, "base64");
   res.set("Content-Type", "image/png");
   res.set("Cache-Control", "no-store");
   res.send(buf);
