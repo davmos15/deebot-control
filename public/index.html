@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>Deebot Control</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --accent: #38bdf8;
+    --accent-glow: rgba(56, 189, 248, 0.25);
+    --green: #4ade80;
+    --orange: #fb923c;
+    --red: #f87171;
+    --text: #f1f5f9;
+    --text2: #94a3b8;
+    --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ── Login ── */
+  #login-screen, #app-screen { display: none; }
+  #login-screen.active, #app-screen.active { display: flex; }
+
+  #login-screen {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100dvh;
+    padding: 24px;
+  }
+  .login-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 32px 24px;
+    width: 100%;
+    max-width: 400px;
+  }
+  .login-card h1 {
+    font-size: 24px;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .login-card .subtitle {
+    color: var(--text2);
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-size: 13px;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--surface2);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
+    outline: none;
+  }
+  .field input:focus, .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  #login-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  #login-btn:disabled { opacity: 0.5; cursor: wait; }
+  #login-error {
+    color: var(--red);
+    text-align: center;
+    font-size: 14px;
+    margin-top: 12px;
+    min-height: 20px;
+  }
+
+  /* ── App ── */
+  #app-screen {
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--surface2);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar .device-name { font-weight: 600; font-size: 18px; }
+  .topbar .logout-btn {
+    background: none;
+    border: 1px solid var(--surface2);
+    color: var(--text2);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .dashboard { padding: 20px; max-width: 500px; margin: 0 auto; width: 100%; }
+
+  /* Status card */
+  .status-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .status-badge.idle { background: var(--surface2); color: var(--text2); }
+  .status-badge.cleaning, .status-badge.auto { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+  .status-badge.charging { background: rgba(251, 146, 60, 0.15); color: var(--orange); }
+  .status-badge.paused { background: rgba(56, 189, 248, 0.15); color: var(--accent); }
+  .status-badge.returning, .status-badge.docking { background: rgba(251, 146, 60, 0.15); color: var(--orange); }
+  .status-badge.error { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+  .status-badge.connecting { background: rgba(56, 189, 248, 0.15); color: var(--accent); }
+
+  .battery-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .battery-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 4px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .battery-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease, background 0.5s ease;
+  }
+
+  /* Buttons grid */
+  .section-label {
+    font-size: 13px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+  .btn-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .btn-grid.three { grid-template-columns: repeat(3, 1fr); }
+  .cmd-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 18px 10px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .cmd-btn:active { transform: scale(0.95); background: var(--surface2); }
+  .cmd-btn .icon { font-size: 28px; }
+  .cmd-btn.primary { background: var(--green); color: var(--bg); }
+  .cmd-btn.primary:active { background: #22c55e; }
+  .cmd-btn.danger { background: var(--red); color: var(--bg); }
+  .cmd-btn.danger:active { background: #ef4444; }
+  .cmd-btn.warn { background: var(--orange); color: var(--bg); }
+  .cmd-btn.warn:active { background: #f97316; }
+
+  /* D-Pad */
+  .dpad {
+    display: grid;
+    grid-template-areas:
+      ". up ."
+      "left stop right"
+      ". down .";
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 24px;
+    max-width: 240px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .dpad button {
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 22px;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .dpad button:active { transform: scale(0.9); background: var(--surface2); }
+  .dpad .up { grid-area: up; }
+  .dpad .down { grid-area: down; }
+  .dpad .left { grid-area: left; }
+  .dpad .right { grid-area: right; }
+  .dpad .stop { grid-area: stop; background: var(--red); color: var(--bg); }
+
+  /* Suction selector */
+  .suction-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .suction-btn {
+    flex: 1;
+    padding: 12px 6px;
+    border: 2px solid var(--surface2);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text2);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .suction-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  /* Consumables */
+  .consumables {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+  .consumable-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+  }
+  .consumable-row + .consumable-row { border-top: 1px solid var(--surface2); }
+  .consumable-name { font-size: 14px; }
+  .consumable-val { font-size: 14px; font-weight: 600; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    color: var(--text);
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-screen" class="active">
+  <div class="login-card">
+    <h1>Deebot Control</h1>
+    <p class="subtitle">Sign in with your Ecovacs account</p>
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" autocomplete="email" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password" placeholder="Your Ecovacs password">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="country">Country</label>
+        <select id="country">
+          <option value="us">US</option>
+          <option value="au">Australia</option>
+          <option value="gb">UK</option>
+          <option value="de">Germany</option>
+          <option value="fr">France</option>
+          <option value="it">Italy</option>
+          <option value="es">Spain</option>
+          <option value="ca">Canada</option>
+          <option value="jp">Japan</option>
+          <option value="cn">China</option>
+          <option value="kr">South Korea</option>
+          <option value="sg">Singapore</option>
+          <option value="my">Malaysia</option>
+          <option value="in">India</option>
+          <option value="br">Brazil</option>
+          <option value="nl">Netherlands</option>
+          <option value="at">Austria</option>
+          <option value="ch">Switzerland</option>
+          <option value="se">Sweden</option>
+          <option value="no">Norway</option>
+          <option value="dk">Denmark</option>
+          <option value="fi">Finland</option>
+          <option value="pl">Poland</option>
+          <option value="pt">Portugal</option>
+          <option value="tw">Taiwan</option>
+          <option value="hk">Hong Kong</option>
+          <option value="nz">New Zealand</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="continent">Continent</label>
+        <select id="continent">
+          <option value="ww">World (ww)</option>
+          <option value="eu">Europe (eu)</option>
+          <option value="na">North America (na)</option>
+          <option value="as">Asia (as)</option>
+        </select>
+      </div>
+    </div>
+    <button id="login-btn" onclick="doLogin()">Connect to Robot</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- ── APP ── -->
+<div id="app-screen">
+  <div class="topbar">
+    <span class="device-name" id="device-name">Deebot</span>
+    <button class="logout-btn" onclick="doLogout()">Logout</button>
+  </div>
+  <div class="dashboard">
+
+    <!-- Status -->
+    <div class="status-card">
+      <span class="status-badge idle" id="status-badge">IDLE</span>
+      <div class="battery-row">
+        <span id="battery-icon">&#128267;</span>
+        <span id="battery-pct">--%</span>
+      </div>
+      <div class="battery-bar">
+        <div class="battery-fill" id="battery-fill" style="width:0%;background:var(--green)"></div>
+      </div>
+    </div>
+
+    <!-- Main controls -->
+    <div class="section-label">Controls</div>
+    <div class="btn-grid">
+      <button class="cmd-btn primary" onclick="cmd('clean')">
+        <span class="icon">&#9654;</span> Clean
+      </button>
+      <button class="cmd-btn danger" onclick="cmd('stop')">
+        <span class="icon">&#9724;</span> Stop
+      </button>
+      <button class="cmd-btn" onclick="cmd('pause')" style="background:var(--accent);color:var(--bg);">
+        <span class="icon">&#10074;&#10074;</span> Pause
+      </button>
+      <button class="cmd-btn warn" onclick="cmd('charge')">
+        <span class="icon">&#9889;</span> Charge
+      </button>
+      <button class="cmd-btn" onclick="cmd('playSound')">
+        <span class="icon">&#128266;</span> Find
+      </button>
+      <button class="cmd-btn" onclick="cmd('relocate')">
+        <span class="icon">&#128205;</span> Relocate
+      </button>
+    </div>
+
+    <!-- Suction -->
+    <div class="section-label">Suction Power</div>
+    <div class="suction-row">
+      <button class="suction-btn" onclick="setSuction('quiet',this)">Quiet</button>
+      <button class="suction-btn active" onclick="setSuction('standard',this)">Standard</button>
+      <button class="suction-btn" onclick="setSuction('max',this)">Max</button>
+      <button class="suction-btn" onclick="setSuction('max+',this)">Max+</button>
+    </div>
+
+    <!-- D-Pad -->
+    <div class="section-label">Manual Control</div>
+    <div class="dpad">
+      <button class="up" onclick="move('forward')">&#9650;</button>
+      <button class="left" onclick="move('left')">&#9664;</button>
+      <button class="stop" onclick="cmd('stop')">&#9724;</button>
+      <button class="right" onclick="move('right')">&#9654;</button>
+      <button class="down" onclick="move('backward')">&#9660;</button>
+    </div>
+
+    <!-- Consumables -->
+    <div class="section-label">Consumables</div>
+    <div class="consumables" id="consumables">
+      <div class="consumable-row">
+        <span class="consumable-name">Main Brush</span>
+        <span class="consumable-val" id="c-main">--</span>
+      </div>
+      <div class="consumable-row">
+        <span class="consumable-name">Side Brush</span>
+        <span class="consumable-val" id="c-side">--</span>
+      </div>
+      <div class="consumable-row">
+        <span class="consumable-name">Filter</span>
+        <span class="consumable-val" id="c-filter">--</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = location.origin;
+let token = localStorage.getItem("deebot_token");
+
+// ── Init ──
+if (token) {
+  showApp();
+  pollState();
+} else {
+  document.getElementById("login-screen").classList.add("active");
+}
+
+// ── Login ──
+async function doLogin() {
+  const btn = document.getElementById("login-btn");
+  const errEl = document.getElementById("login-error");
+  errEl.textContent = "";
+  btn.disabled = true;
+  btn.textContent = "Connecting...";
+
+  try {
+    const res = await fetch(API + "/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: document.getElementById("email").value.trim(),
+        password: document.getElementById("password").value,
+        country: document.getElementById("country").value,
+        continent: document.getElementById("continent").value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Login failed");
+
+    token = data.token;
+    localStorage.setItem("deebot_token", token);
+    document.getElementById("device-name").textContent = data.device || "Deebot";
+    showApp();
+    pollState();
+    toast("Connected!");
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Connect to Robot";
+  }
+}
+
+function showApp() {
+  document.getElementById("login-screen").classList.remove("active");
+  document.getElementById("app-screen").classList.add("active");
+}
+
+// ── Logout ──
+async function doLogout() {
+  try { await fetch(API + "/api/logout", { method: "POST", headers: authHeaders() }); } catch {}
+  token = null;
+  localStorage.removeItem("deebot_token");
+  document.getElementById("app-screen").classList.remove("active");
+  document.getElementById("login-screen").classList.add("active");
+}
+
+// ── Auth helper ──
+function authHeaders() {
+  return { "Authorization": "Bearer " + token, "Content-Type": "application/json" };
+}
+
+// ── Commands ──
+async function cmd(action, body = {}) {
+  try {
+    const res = await fetch(API + "/api/" + action, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify(body),
+    });
+    if (res.status === 401) return doLogout();
+    const data = await res.json();
+    if (data.success) toast(capitalize(action) + " sent");
+    else toast(data.error || "Failed", true);
+  } catch { toast("Connection error", true); }
+}
+
+async function move(dir) {
+  await cmd("move", { direction: dir });
+}
+
+async function setSuction(level, el) {
+  document.querySelectorAll(".suction-btn").forEach(b => b.classList.remove("active"));
+  el.classList.add("active");
+  await fetch(API + "/api/setSuction", {
+    method: "POST", headers: authHeaders(), body: JSON.stringify({ level }),
+  });
+  toast("Suction: " + level);
+}
+
+// ── Polling ──
+let pollTimer;
+async function pollState() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(fetchState, 3000);
+  fetchState();
+}
+
+async function fetchState() {
+  if (!token) return;
+  try {
+    const res = await fetch(API + "/api/state", { headers: authHeaders() });
+    if (res.status === 401) return doLogout();
+    const s = await res.json();
+    updateUI(s);
+  } catch {}
+}
+
+function updateUI(s) {
+  // Status
+  const badge = document.getElementById("status-badge");
+  const statusText = s.status || "idle";
+  badge.textContent = statusText.toUpperCase();
+  badge.className = "status-badge " + statusText.toLowerCase().replace(/\s+/g, "");
+
+  // Battery
+  const pct = s.battery != null ? s.battery : null;
+  document.getElementById("battery-pct").textContent = pct != null ? pct + "%" : "--%";
+  const fill = document.getElementById("battery-fill");
+  if (pct != null) {
+    fill.style.width = pct + "%";
+    fill.style.background = pct > 40 ? "var(--green)" : pct > 15 ? "var(--orange)" : "var(--red)";
+  }
+
+  // Consumables
+  const c = s.consumables || {};
+  document.getElementById("c-main").textContent = fmtLife(c.mainBrush);
+  document.getElementById("c-side").textContent = fmtLife(c.sideBrush);
+  document.getElementById("c-filter").textContent = fmtLife(c.filter);
+
+  // Device name
+  if (s.deviceName) document.getElementById("device-name").textContent = s.deviceName;
+}
+
+function fmtLife(v) {
+  if (v == null) return "--";
+  return Math.round(v * 100) + "%";
+}
+
+// ── Toast ──
+function toast(msg, isError) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.style.borderColor = isError ? "var(--red)" : "var(--accent)";
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Enter key on login form
+document.getElementById("password").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doLogin();
+});
+</script>
+</body>
+</html>

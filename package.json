@@ -1,0 +1,22 @@
+{
+  "name": "deebot-control",
+  "version": "1.0.0",
+  "description": "Mobile-friendly web UI for controlling Ecovacs Deebot robot vacuums",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["deebot", "ecovacs", "robot-vacuum", "smart-home"],
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "ecovacs-deebot": "^0.9.5",
+    "express": "^5.2.1",
+    "node-machine-id": "^1.1.12"
+  }
+}
