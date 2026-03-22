@@ -123,19 +123,16 @@ app.post("/api/login", async (req, res) => {
       vacState.chargePos = { x, y, angle: a };
     });
     vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
-    vacBot.on("MapImage", (v) => {
-      session.mapImage = v;
-      console.log(`Map image received (${typeof v}, length: ${v ? v.length : 0}) for session ${token.slice(0, 8)}...`);
-    });
     vacBot.on("MapImageData", (v) => {
-      console.log(`MapImageData received for session ${token.slice(0, 8)}...`);
+      session.mapImage = v;
+      console.log(`Map image updated for session ${token.slice(0, 8)}...`);
     });
     vacBot.on("CurrentMapMID", (v) => {
+      vacState.currentMapMID = v;
       console.log(`CurrentMapMID: ${v}`);
     });
     vacBot.on("CurrentMapName", (v) => {
       vacState.currentMapName = v;
-      console.log(`CurrentMapName: ${v}`);
     });
     vacBot.on("CleanLogs", (l) => { session.cleaningLog = l; });
     vacBot.on("Error", (msg) => { console.error("VacBot error:", msg); });
