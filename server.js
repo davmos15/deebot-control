@@ -25,7 +25,7 @@ app.use(cors({ origin: "*" }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ── Sessions: token -> { api, vacBot, vacState, mapData, cleaningLog, timer } ─
+// ── Sessions: token -> { api, vacBot, vacState, cleaningLog, mapImage, timer } ─
 const sessions = new Map();
 const SESSION_TTL = 1000 * 60 * 60 * 4; // 4 hours
 
@@ -210,9 +210,7 @@ cmdRoute("/api/move", (s, req, res) => {
   if (status && status !== "idle" && status !== "paused" && status !== "charging") {
     s.vacBot.run("Pause");
   }
-  const dir = req.body.direction;
-  const cmdMap = { forward: "MoveForward", backward: "MoveBackward", left: "MoveLeft", right: "MoveRight" };
-  s.vacBot.run(cmdMap[dir] || "Move", dir);
+  s.vacBot.run("Move", req.body.direction);
   res.json({ success: true });
 });
 

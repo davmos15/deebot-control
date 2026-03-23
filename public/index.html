@@ -795,7 +795,12 @@ async function cmd(action, body = {}) {
 }
 
 async function move(dir) {
-  await cmd("move", { direction: dir });
+  try {
+    const res = await fetch(API + "/api/move", {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ direction: dir }),
+    });
+    if (res.status === 401) return doLogout();
+  } catch {}
 }
 
 async function setSuction(level, el) {

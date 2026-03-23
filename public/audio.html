@@ -362,12 +362,6 @@ async function playSound(sid, btn) {
 function updateVolLabel() {
   document.getElementById("vol-val").textContent = document.getElementById("vol-slider").value;
 }
-async function setVolume() {
-  const val = Number(document.getElementById("vol-slider").value);
-  const res = await post("setVolume", { value: val });
-  log(`SetVolume(${val}): ${JSON.stringify(res)}`);
-  toast("Volume: " + val);
-}
 
 // ── Toggles ──
 async function setToggle(endpoint, enabled) {
