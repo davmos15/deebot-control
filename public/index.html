@@ -931,26 +931,40 @@ function toggleControlMode() {
 }
 
 // ── Joystick ──
-(function initJoystick() {
-  const area = document.getElementById("joystick");
-  const knob = document.getElementById("joystick-knob");
-  if (!area || !knob) return;
-
+// Shared joystick logic — X axis = turn, Y axis = fwd/back, diagonal = both
+function createJoystick(area, knob, knobInset) {
   let active = false;
-  let lastDir = null;
   let moveInterval = null;
+  let lastKey = "";
   const deadzone = 0.25;
 
-  function getDir(dx, dy, dist) {
-    if (dist < deadzone) return null;
-    const angle = Math.atan2(-dy, dx) * (180 / Math.PI);
-    if (angle >= -45 && angle < 45) return "right";
-    if (angle >= 45 && angle < 135) return "forward";
-    if (angle >= -135 && angle < -45) return "backward";
-    return "left";
+  function getAxes(dx, dy) {
+    // Y axis: forward/backward (negative Y = forward on screen)
+    let fb = null;
+    if (dy < -deadzone) fb = "forward";
+    else if (dy > deadzone) fb = "backward";
+    // X axis: turn left/right
+    let lr = null;
+    if (dx < -deadzone) lr = "left";
+    else if (dx > deadzone) lr = "right";
+    return { fb, lr };
   }
 
-  function handleMove(clientX, clientY) {
+  function sendAxes(fb, lr) {
+    const key = (fb || "") + "|" + (lr || "");
+    if (key === lastKey) return;
+    lastKey = key;
+    clearInterval(moveInterval);
+    if (!fb && !lr) return;
+    function fire() {
+      if (fb) move(fb);
+      if (lr) move(lr);
+    }
+    fire();
+    moveInterval = setInterval(fire, 400);
+  }
+
+  function handlePointer(clientX, clientY) {
     const rect = area.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
@@ -960,25 +974,17 @@ function toggleControlMode() {
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > 1) { dx /= dist; dy /= dist; }
 
-    // Move knob visually
-    const px = dx * (radius - 36);
-    const py = dy * (radius - 36);
+    const px = dx * (radius - knobInset);
+    const py = dy * (radius - knobInset);
     knob.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
 
-    const dir = getDir(dx, dy, dist);
-    if (dir !== lastDir) {
-      lastDir = dir;
-      clearInterval(moveInterval);
-      if (dir) {
-        move(dir);
-        moveInterval = setInterval(() => move(dir), 500);
-      }
-    }
+    const { fb, lr } = getAxes(dx, dy);
+    sendAxes(fb, lr);
   }
 
-  function resetKnob() {
+  function reset() {
     active = false;
-    lastDir = null;
+    lastKey = "";
     clearInterval(moveInterval);
     knob.style.transform = "translate(-50%, -50%)";
   }
@@ -986,15 +992,22 @@ function toggleControlMode() {
   area.addEventListener("pointerdown", (e) => {
     active = true;
     area.setPointerCapture(e.pointerId);
-    handleMove(e.clientX, e.clientY);
+    handlePointer(e.clientX, e.clientY);
   });
   area.addEventListener("pointermove", (e) => {
     if (!active) return;
-    handleMove(e.clientX, e.clientY);
+    handlePointer(e.clientX, e.clientY);
   });
-  area.addEventListener("pointerup", resetKnob);
-  area.addEventListener("pointercancel", resetKnob);
-})();
+  area.addEventListener("pointerup", reset);
+  area.addEventListener("pointercancel", reset);
+}
+
+// Init main joystick
+createJoystick(
+  document.getElementById("joystick"),
+  document.getElementById("joystick-knob"),
+  36
+);
 
 // ── Fullscreen Map ──
 let fsMapInterval = null;
@@ -1032,62 +1045,7 @@ function initFsJoystick() {
   const knob = document.getElementById("fs-joystick-knob");
   if (area._init) return;
   area._init = true;
-
-  let active = false;
-  let lastDir = null;
-  let moveInterval = null;
-  const deadzone = 0.25;
-
-  function getDir(dx, dy, dist) {
-    if (dist < deadzone) return null;
-    const angle = Math.atan2(-dy, dx) * (180 / Math.PI);
-    if (angle >= -45 && angle < 45) return "right";
-    if (angle >= 45 && angle < 135) return "forward";
-    if (angle >= -135 && angle < -45) return "backward";
-    return "left";
-  }
-
-  function handleMove(clientX, clientY) {
-    const rect = area.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const radius = rect.width / 2;
-    let dx = (clientX - cx) / radius;
-    let dy = (clientY - cy) / radius;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > 1) { dx /= dist; dy /= dist; }
-    const px = dx * (radius - 25);
-    const py = dy * (radius - 25);
-    knob.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
-    const dir = getDir(dx, dy, dist);
-    if (dir !== lastDir) {
-      lastDir = dir;
-      clearInterval(moveInterval);
-      if (dir) {
-        move(dir);
-        moveInterval = setInterval(() => move(dir), 500);
-      }
-    }
-  }
-
-  function resetKnob() {
-    active = false;
-    lastDir = null;
-    clearInterval(moveInterval);
-    knob.style.transform = "translate(-50%, -50%)";
-  }
-
-  area.addEventListener("pointerdown", (e) => {
-    active = true;
-    area.setPointerCapture(e.pointerId);
-    handleMove(e.clientX, e.clientY);
-  });
-  area.addEventListener("pointermove", (e) => {
-    if (!active) return;
-    handleMove(e.clientX, e.clientY);
-  });
-  area.addEventListener("pointerup", resetKnob);
-  area.addEventListener("pointercancel", resetKnob);
+  createJoystick(area, knob, 25);
 }
 
 // Enter key on login form

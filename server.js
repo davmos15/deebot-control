@@ -210,7 +210,9 @@ cmdRoute("/api/move", (s, req, res) => {
   if (status && status !== "idle" && status !== "paused" && status !== "charging") {
     s.vacBot.run("Pause");
   }
-  s.vacBot.run("Move", req.body.direction);
+  const dir = req.body.direction;
+  const cmdMap = { forward: "MoveForward", backward: "MoveBackward", left: "MoveLeft", right: "MoveRight" };
+  s.vacBot.run(cmdMap[dir] || "Move", dir);
   res.json({ success: true });
 });
 
