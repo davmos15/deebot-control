@@ -143,6 +143,7 @@ app.post("/api/login", async (req, res) => {
     await api.connect(email, EcoVacsAPI.md5(password));
 
     const devices = await api.devices();
+    console.log(`Found ${devices.length} device(s):`, devices.map(d => d.nick || d.deviceName || d.name || d.did));
     if (!devices.length) {
       return res.status(404).json({ error: "No devices found on this Ecovacs account" });
     }
