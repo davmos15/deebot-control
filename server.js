@@ -167,7 +167,7 @@ app.post("/api/login", async (req, res) => {
       did: d.did,
     }));
 
-    res.json({ token, device: vacState.deviceName, devices: deviceList });
+    res.json({ token, device: session.vacState.deviceName, devices: deviceList });
   } catch (err) {
     console.error("Login failed:", err.message);
     res.status(401).json({ error: "Login failed: " + err.message });
