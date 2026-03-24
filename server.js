@@ -51,6 +51,80 @@ function destroySession(token) {
   console.log(`Session ${token.slice(0, 8)}... destroyed (${sessions.size} active)`);
 }
 
+// ── Connect a device into a session ──────────────────────────────────────────
+async function connectDevice(session, device) {
+  // Disconnect previous bot if any
+  try { if (session.vacBot) session.vacBot.disconnect(); } catch {}
+
+  const api = session.api;
+  const vacBot = api.getVacBot(
+    api.uid, EcoVacsAPI.REALM, api.resource, api.user_access_token,
+    device
+  );
+
+  const vacState = {
+    status: "connecting",
+    battery: null,
+    consumables: {},
+    deviceName: device.nick || device.deviceName || device.name || "Deebot",
+    robotPos: null,
+    chargePos: null,
+    currentSpotArea: null,
+    currentMapName: null,
+  };
+
+  session.vacBot = vacBot;
+  session.vacState = vacState;
+  session.cleaningLog = [];
+  session.mapImage = null;
+
+  // Wire up events
+  vacBot.on("ready", () => {
+    vacState.status = "idle";
+    vacBot.run("GetBatteryState");
+    vacBot.run("GetCleanState");
+    vacBot.run("GetChargeState");
+    vacBot.run("GetLifeSpan", "main_brush");
+    vacBot.run("GetLifeSpan", "side_brush");
+    vacBot.run("GetLifeSpan", "filter");
+    vacBot.run("GetPosition");
+    vacBot.run("GetChargePosition");
+    vacBot.run("GetMaps", true, true);
+  });
+  vacBot.on("BatteryInfo", (v) => { vacState.battery = Math.round(v); });
+  vacBot.on("CleanReport", (v) => { vacState.status = v; });
+  vacBot.on("ChargeState", (v) => { if (v === "charging") vacState.status = "charging"; });
+  vacBot.on("LifeSpan_main_brush", (v) => { vacState.consumables.mainBrush = v; });
+  vacBot.on("LifeSpan_side_brush", (v) => { vacState.consumables.sideBrush = v; });
+  vacBot.on("LifeSpan_filter", (v) => { vacState.consumables.filter = v; });
+  vacBot.on("DeebotPosition", (v) => {
+    const [x, y, a] = String(v).split(",").map(Number);
+    vacState.robotPos = { x, y, angle: a };
+  });
+  vacBot.on("ChargePosition", (v) => {
+    const [x, y, a] = String(v).split(",").map(Number);
+    vacState.chargePos = { x, y, angle: a };
+  });
+  vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
+  vacBot.on("MapImageData", (v) => {
+    if (v && v.mapBase64PNG) {
+      session.mapImage = v.mapBase64PNG;
+    }
+  });
+  vacBot.on("CurrentMapMID", (v) => { vacState.currentMapMID = v; });
+  vacBot.on("Volume", (v) => { vacState.volume = v; });
+  vacBot.on("VoiceSimple", (v) => { vacState.voiceSimple = v; });
+  vacBot.on("VoiceAssistantState", (v) => { vacState.voiceAssistant = v; });
+  vacBot.on("BlueSpeaker", (v) => { vacState.bluetoothSpeaker = v; });
+  vacBot.on("CurrentMapName", (v) => {
+    vacState.currentMapName = v;
+  });
+  vacBot.on("CleanLogs", (l) => { session.cleaningLog = l; });
+  vacBot.on("Error", (msg) => { console.error("VacBot error:", msg); });
+
+  await vacBot.connect_and_wait_until_ready();
+}
+
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 app.post("/api/login", async (req, res) => {
   const { email, password, country, continent } = req.body;
@@ -74,72 +148,13 @@ app.post("/api/login", async (req, res) => {
     }
 
     const device = devices[0];
-    const vacBot = api.getVacBot(
-      api.uid, EcoVacsAPI.REALM, api.resource, api.user_access_token,
-      device
-    );
-
-    const vacState = {
-      status: "connecting",
-      battery: null,
-      consumables: {},
-      deviceName: device.nick || device.deviceName || device.name || "Deebot",
-      robotPos: null,
-      chargePos: null,
-      currentSpotArea: null,
-      currentMapName: null,
-    };
 
     // Create session object early so event handlers can mutate it directly
     const token = crypto.randomUUID();
     const timer = setTimeout(() => destroySession(token), SESSION_TTL);
-    const session = { api, vacBot, vacState, cleaningLog: [], mapImage: null, timer };
+    const session = { api, vacBot: null, vacState: null, cleaningLog: [], mapImage: null, timer, devices };
 
-    // Wire up events
-    vacBot.on("ready", () => {
-      vacState.status = "idle";
-      vacBot.run("GetBatteryState");
-      vacBot.run("GetCleanState");
-      vacBot.run("GetChargeState");
-      vacBot.run("GetLifeSpan", "main_brush");
-      vacBot.run("GetLifeSpan", "side_brush");
-      vacBot.run("GetLifeSpan", "filter");
-      vacBot.run("GetPosition");
-      vacBot.run("GetChargePosition");
-      vacBot.run("GetMaps", true, true);
-    });
-    vacBot.on("BatteryInfo", (v) => { vacState.battery = Math.round(v); });
-    vacBot.on("CleanReport", (v) => { vacState.status = v; });
-    vacBot.on("ChargeState", (v) => { if (v === "charging") vacState.status = "charging"; });
-    vacBot.on("LifeSpan_main_brush", (v) => { vacState.consumables.mainBrush = v; });
-    vacBot.on("LifeSpan_side_brush", (v) => { vacState.consumables.sideBrush = v; });
-    vacBot.on("LifeSpan_filter", (v) => { vacState.consumables.filter = v; });
-    vacBot.on("DeebotPosition", (v) => {
-      const [x, y, a] = String(v).split(",").map(Number);
-      vacState.robotPos = { x, y, angle: a };
-    });
-    vacBot.on("ChargePosition", (v) => {
-      const [x, y, a] = String(v).split(",").map(Number);
-      vacState.chargePos = { x, y, angle: a };
-    });
-    vacBot.on("DeebotPositionCurrentSpotAreaName", (v) => { vacState.currentSpotArea = v; });
-    vacBot.on("MapImageData", (v) => {
-      if (v && v.mapBase64PNG) {
-        session.mapImage = v.mapBase64PNG;
-      }
-    });
-    vacBot.on("CurrentMapMID", (v) => { vacState.currentMapMID = v; });
-    vacBot.on("Volume", (v) => { vacState.volume = v; });
-    vacBot.on("VoiceSimple", (v) => { vacState.voiceSimple = v; });
-    vacBot.on("VoiceAssistantState", (v) => { vacState.voiceAssistant = v; });
-    vacBot.on("BlueSpeaker", (v) => { vacState.bluetoothSpeaker = v; });
-    vacBot.on("CurrentMapName", (v) => {
-      vacState.currentMapName = v;
-    });
-    vacBot.on("CleanLogs", (l) => { session.cleaningLog = l; });
-    vacBot.on("Error", (msg) => { console.error("VacBot error:", msg); });
-
-    await vacBot.connect_and_wait_until_ready();
+    await connectDevice(session, device);
 
     sessions.set(token, session);
 
@@ -165,11 +180,38 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+// ── SWITCH DEVICE ────────────────────────────────────────────────────────────
+app.post("/api/switchDevice", async (req, res) => {
+  const s = getSession(req, res);
+  if (!s) return;
+  const { index } = req.body;
+  if (index == null || !s.devices || !s.devices[index]) {
+    return res.status(400).json({ error: "Invalid device index" });
+  }
+  try {
+    await connectDevice(s, s.devices[index]);
+    const deviceList = s.devices.map((d, i) => ({
+      index: i,
+      name: d.nick || d.deviceName || d.name || "Unknown",
+      did: d.did,
+    }));
+    res.json({ device: s.vacState.deviceName, devices: deviceList, selectedIndex: index });
+  } catch (err) {
+    console.error("Switch device failed:", err.message);
+    res.status(500).json({ error: "Failed to switch device: " + err.message });
+  }
+});
+
 // ── STATE ─────────────────────────────────────────────────────────────────────
 app.get("/api/state", (req, res) => {
   const s = getSession(req, res);
   if (!s) return;
-  res.json({ ...s.vacState, hasMap: !!s.mapImage, cleaningLog: s.cleaningLog });
+  const deviceList = (s.devices || []).map((d, i) => ({
+    index: i,
+    name: d.nick || d.deviceName || d.name || "Unknown",
+    did: d.did,
+  }));
+  res.json({ ...s.vacState, hasMap: !!s.mapImage, cleaningLog: s.cleaningLog, devices: deviceList });
 });
 
 // ── COMMANDS ──────────────────────────────────────────────────────────────────
@@ -205,12 +247,18 @@ cmdRoute("/api/charge", (s, _req, res) => {
 });
 
 cmdRoute("/api/move", (s, req, res) => {
-  const status = s.vacState.status;
-  // If cleaning/auto, pause first so manual move works
-  if (status && status !== "idle" && status !== "paused" && status !== "charging") {
-    s.vacBot.run("Pause");
+  const dirMap = {
+    forward: "MoveForward",
+    backward: "MoveBackward",
+    left: "MoveLeft",
+    right: "MoveRight",
+    turn_around: "MoveTurnAround",
+  };
+  const command = dirMap[req.body.direction];
+  if (!command) {
+    return res.status(400).json({ error: "Invalid direction" });
   }
-  s.vacBot.run("Move", req.body.direction);
+  s.vacBot.run(command);
   res.json({ success: true });
 });
 

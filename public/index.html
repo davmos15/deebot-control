@@ -119,7 +119,54 @@
     top: 0;
     z-index: 10;
   }
-  .topbar .device-name { font-weight: 600; font-size: 18px; }
+  .topbar .device-name { font-weight: 600; font-size: 18px; cursor: default; }
+  .device-selector {
+    position: relative;
+  }
+  .device-selector .device-name {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .device-selector .device-name .chevron {
+    font-size: 12px;
+    color: var(--text2);
+    transition: transform 0.2s;
+  }
+  .device-selector.open .device-name .chevron {
+    transform: rotate(180deg);
+  }
+  .device-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    min-width: 200px;
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 10px;
+    padding: 6px 0;
+    z-index: 20;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .device-selector.open .device-dropdown { display: block; }
+  .device-dropdown .device-option {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    background: none;
+    color: var(--text);
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .device-dropdown .device-option:hover { background: var(--surface2); }
+  .device-dropdown .device-option.active {
+    color: var(--accent);
+    font-weight: 600;
+  }
   .topbar .logout-btn {
     background: none;
     border: 1px solid var(--surface2);
@@ -558,7 +605,10 @@
 <!-- ── APP ── -->
 <div id="app-screen">
   <div class="topbar">
-    <span class="device-name" id="device-name">Deebot</span>
+    <div class="device-selector" id="device-selector">
+      <span class="device-name" id="device-name" onclick="toggleDeviceDropdown()">Deebot<span class="chevron" id="device-chevron" style="display:none;">&#9660;</span></span>
+      <div class="device-dropdown" id="device-dropdown"></div>
+    </div>
     <div style="display:flex;gap:8px;">
       <a href="/audio.html" class="logout-btn" style="text-decoration:none;">Audio Lab</a>
       <button class="logout-btn" onclick="doLogout()">Logout</button>
@@ -714,6 +764,8 @@
 <script>
 const API = location.origin;
 let token = localStorage.getItem("deebot_token");
+let deviceList = [];
+let selectedDeviceIndex = 0;
 
 // ── Init ──
 if (token) {
@@ -750,7 +802,8 @@ async function doLogin() {
 
     token = data.token;
     localStorage.setItem("deebot_token", token);
-    document.getElementById("device-name").textContent = data.device || "Deebot";
+    setDeviceName(data.device || "Deebot");
+    if (data.devices) updateDeviceList(data.devices, 0);
     showApp();
     pollState();
     toast("Connected!");
@@ -898,13 +951,75 @@ function updateUI(s) {
   document.getElementById("c-side").textContent = fmtLife(c.sideBrush);
   document.getElementById("c-filter").textContent = fmtLife(c.filter);
 
-  // Device name
-  if (s.deviceName) document.getElementById("device-name").textContent = s.deviceName;
+  // Device name & selector
+  if (s.deviceName) setDeviceName(s.deviceName);
+  if (s.devices && s.devices.length > 1 && deviceList.length === 0) {
+    updateDeviceList(s.devices, selectedDeviceIndex);
+  }
 }
 
 function fmtLife(v) {
   if (v == null) return "--";
   return Math.round(v) + "%";
+}
+
+// ── Device Selector ──
+function setDeviceName(name) {
+  const el = document.getElementById("device-name");
+  const chevron = document.getElementById("device-chevron");
+  el.childNodes[0].textContent = name;
+  // Keep chevron node intact
+}
+
+function updateDeviceList(devices, activeIndex) {
+  deviceList = devices;
+  selectedDeviceIndex = activeIndex;
+  const chevron = document.getElementById("device-chevron");
+  const dropdown = document.getElementById("device-dropdown");
+  if (devices.length <= 1) {
+    chevron.style.display = "none";
+    dropdown.innerHTML = "";
+    return;
+  }
+  chevron.style.display = "";
+  dropdown.innerHTML = devices.map((d, i) =>
+    `<button class="device-option${i === activeIndex ? " active" : ""}" onclick="switchDevice(${i})">${d.name}</button>`
+  ).join("");
+}
+
+function toggleDeviceDropdown() {
+  if (deviceList.length <= 1) return;
+  document.getElementById("device-selector").classList.toggle("open");
+}
+
+// Close dropdown when clicking outside
+document.addEventListener("click", (e) => {
+  const sel = document.getElementById("device-selector");
+  if (!sel.contains(e.target)) sel.classList.remove("open");
+});
+
+async function switchDevice(index) {
+  if (index === selectedDeviceIndex) {
+    document.getElementById("device-selector").classList.remove("open");
+    return;
+  }
+  document.getElementById("device-selector").classList.remove("open");
+  toast("Switching robot...");
+  try {
+    const res = await fetch(API + "/api/switchDevice", {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ index }),
+    });
+    if (res.status === 401) return doLogout();
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Switch failed");
+    setDeviceName(data.device);
+    updateDeviceList(data.devices, data.selectedIndex);
+    mapVisible = false;
+    document.getElementById("map-section").style.display = "none";
+    toast("Switched to " + data.device);
+  } catch (err) {
+    toast(err.message, true);
+  }
 }
 
 // ── Toast ──
